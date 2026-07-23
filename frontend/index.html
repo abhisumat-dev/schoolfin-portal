@@ -1,0 +1,1632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SchoolFin — Fee Command Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
+
+<style>
+/* ============================================================
+   TOKENS
+   ============================================================ */
+:root{
+  --bg-deep:#080c16;
+  --bg-panel:#0d1424;
+  --glass:rgba(255,255,255,0.055);
+  --glass-strong:rgba(255,255,255,0.09);
+  --glass-border:rgba(255,255,255,0.10);
+  --line:rgba(255,255,255,0.08);
+
+  --accent-money:#10e0a3;
+  --accent-money-dim:#0c8f6b;
+  --accent-risk:#f5a524;
+  --accent-danger:#f5556b;
+  --accent-info:#7c8cff;
+
+  --text-hi:#eef2fa;
+  --text-mid:#aab3c8;
+  --text-lo:#6b7488;
+
+  --radius-lg:20px;
+  --radius-md:14px;
+  --radius-sm:9px;
+
+  --font-display:'Space Grotesk', sans-serif;
+  --font-body:'Inter', sans-serif;
+  --font-mono:'JetBrains Mono', monospace;
+}
+
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  margin:0;
+  background:
+    radial-gradient(ellipse 900px 500px at 12% -10%, rgba(124,140,255,0.14), transparent 60%),
+    radial-gradient(ellipse 700px 600px at 100% 0%, rgba(16,224,163,0.10), transparent 55%),
+    var(--bg-deep);
+  color:var(--text-hi);
+  font-family:var(--font-body);
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+::selection{background:var(--accent-money); color:#04140f;}
+a{color:inherit;}
+button{font-family:inherit;}
+::-webkit-scrollbar{width:10px;height:10px;}
+::-webkit-scrollbar-thumb{background:var(--glass-strong); border-radius:10px;}
+::-webkit-scrollbar-track{background:transparent;}
+
+/* ============================================================
+   GLASS PRIMITIVES
+   ============================================================ */
+.glass{
+  background:var(--glass);
+  border:1px solid var(--glass-border);
+  border-radius:var(--radius-lg);
+  backdrop-filter:blur(18px) saturate(140%);
+  -webkit-backdrop-filter:blur(18px) saturate(140%);
+}
+.glass-strong{
+  background:var(--glass-strong);
+  border:1px solid var(--glass-border);
+  border-radius:var(--radius-md);
+  backdrop-filter:blur(22px) saturate(150%);
+  -webkit-backdrop-filter:blur(22px) saturate(150%);
+}
+
+/* ============================================================
+   LAYOUT SHELL
+   ============================================================ */
+.shell{display:grid; grid-template-columns:236px 1fr; min-height:100vh;}
+
+/* --- Signature: the pulse rail --- */
+.pulse-rail{
+  position:fixed; top:0; left:236px; right:0; height:2px; z-index:40;
+  background:linear-gradient(90deg, transparent, rgba(16,224,163,0.5), transparent);
+  overflow:hidden;
+}
+.pulse-rail::after{
+  content:''; position:absolute; top:0; left:-30%; width:30%; height:100%;
+  background:linear-gradient(90deg, transparent, var(--accent-money), transparent);
+  animation:pulseTravel 2.6s linear infinite;
+}
+@keyframes pulseTravel{ 0%{left:-30%;} 100%{left:100%;} }
+
+/* --- Sidebar --- */
+.sidebar{
+  position:sticky; top:0; height:100vh; padding:26px 16px;
+  border-right:1px solid var(--line);
+  display:flex; flex-direction:column; gap:26px;
+}
+.brand{display:flex; align-items:center; gap:10px; padding:0 8px;}
+.brand-mark{
+  width:34px; height:34px; border-radius:10px; flex:none;
+  background:linear-gradient(135deg, var(--accent-money), var(--accent-info));
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--font-mono); font-weight:700; color:#04140f; font-size:15px;
+}
+.brand-text{font-family:var(--font-display); font-weight:700; font-size:17px; letter-spacing:-0.02em;}
+.brand-sub{font-size:10.5px; color:var(--text-lo); letter-spacing:0.14em; text-transform:uppercase; margin-top:-2px;}
+
+.nav{display:flex; flex-direction:column; gap:3px;}
+.nav-item{
+  display:flex; align-items:center; gap:11px;
+  padding:10px 12px; border-radius:var(--radius-sm);
+  color:var(--text-mid); font-size:13.5px; font-weight:500; cursor:pointer;
+  border:1px solid transparent; transition:background .15s, color .15s, border-color .15s;
+  user-select:none;
+}
+.nav-item svg{width:17px; height:17px; flex:none; opacity:.85;}
+.nav-item:hover{background:var(--glass); color:var(--text-hi);}
+.nav-item.active{background:rgba(16,224,163,0.10); color:var(--accent-money); border-color:rgba(16,224,163,0.22);}
+.nav-item .badge{
+  margin-left:auto; font-family:var(--font-mono); font-size:10px; padding:1px 6px;
+  border-radius:20px; background:rgba(245,85,107,0.16); color:var(--accent-danger);
+}
+
+.conn-card{margin-top:auto; padding:12px; border-radius:var(--radius-md);}
+.conn-row{display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-mid);}
+.conn-dot{width:8px; height:8px; border-radius:50%; background:var(--accent-money); box-shadow:0 0 8px var(--accent-money); flex:none;}
+.conn-dot.off{background:var(--accent-danger); box-shadow:0 0 8px var(--accent-danger);}
+.conn-mode{font-family:var(--font-mono); font-size:10px; color:var(--text-lo); margin-top:4px;}
+
+/* --- Main --- */
+.main{padding:22px 30px 60px; min-width:0;}
+.topbar{display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:22px; flex-wrap:wrap; gap:14px;}
+.page-title{font-family:var(--font-display); font-size:26px; font-weight:600; letter-spacing:-0.01em;}
+.page-sub{color:var(--text-lo); font-size:13px; margin-top:3px;}
+.topbar-right{display:flex; gap:10px; align-items:center;}
+.pill{
+  font-family:var(--font-mono); font-size:11px; padding:6px 11px; border-radius:20px;
+  color:var(--text-mid); display:flex; align-items:center; gap:6px;
+}
+
+.view{display:none; animation:fadeUp .35s ease;}
+.view.active{display:block;}
+@keyframes fadeUp{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);} }
+
+/* ============================================================
+   METRIC STRIP
+   ============================================================ */
+.metric-grid{display:grid; grid-template-columns:repeat(4, 1fr); gap:14px; margin-bottom:22px;}
+.metric-card{padding:18px 20px; position:relative; overflow:hidden;}
+.metric-label{font-size:11.5px; color:var(--text-lo); text-transform:uppercase; letter-spacing:0.08em;}
+.metric-value{font-family:var(--font-mono); font-size:28px; font-weight:700; margin-top:8px; color:var(--text-hi);}
+.metric-value.money{color:var(--accent-money);}
+.metric-value.risk{color:var(--accent-risk);}
+.metric-value.danger{color:var(--accent-danger);}
+.metric-delta{font-size:11px; color:var(--text-lo); margin-top:5px;}
+.metric-glow{position:absolute; width:110px; height:110px; border-radius:50%; filter:blur(40px); opacity:.35; top:-30px; right:-30px;}
+
+/* ============================================================
+   RISK MATRIX
+   ============================================================ */
+.section-head{display:flex; align-items:center; justify-content:space-between; margin:26px 0 14px;}
+.section-title{font-family:var(--font-display); font-size:16px; font-weight:600;}
+.section-sub{font-size:12px; color:var(--text-lo);}
+.sort-chip{font-family:var(--font-mono); font-size:11px; color:var(--text-mid); padding:5px 10px; border-radius:20px; cursor:pointer;}
+.sort-chip.active{color:var(--accent-money); background:rgba(16,224,163,0.10);}
+
+.risk-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:14px;}
+.risk-card{padding:16px 17px; position:relative; border-left:3px solid var(--accent-risk);}
+.risk-card.severe{border-left-color:var(--accent-danger);}
+.risk-card.moderate{border-left-color:var(--accent-risk);}
+.risk-card.low{border-left-color:var(--accent-money);}
+.risk-top{display:flex; justify-content:space-between; align-items:flex-start;}
+.risk-name{font-weight:600; font-size:14.5px;}
+.risk-meta{font-size:11.5px; color:var(--text-lo); margin-top:2px;}
+.risk-score-badge{
+  font-family:var(--font-mono); font-size:12px; font-weight:700; padding:3px 9px; border-radius:20px;
+  background:rgba(245,85,107,0.14); color:var(--accent-danger); flex:none;
+}
+.risk-score-badge.moderate{background:rgba(245,165,36,0.14); color:var(--accent-risk);}
+.risk-score-badge.low{background:rgba(16,224,163,0.14); color:var(--accent-money);}
+.risk-stats{display:flex; gap:16px; margin:12px 0; font-family:var(--font-mono); font-size:12px;}
+.risk-stat b{display:block; font-size:15px; color:var(--text-hi); font-weight:700;}
+.risk-stat span{color:var(--text-lo); font-size:10.5px; text-transform:uppercase; letter-spacing:.06em;}
+.risk-actions{display:flex; gap:8px; margin-top:10px;}
+.btn{
+  border:1px solid var(--glass-border); background:var(--glass-strong); color:var(--text-hi);
+  padding:8px 12px; border-radius:10px; font-size:12px; font-weight:500; cursor:pointer;
+  display:flex; align-items:center; gap:6px; transition:transform .1s, background .15s, border-color .15s;
+}
+.btn:hover{transform:translateY(-1px); border-color:rgba(255,255,255,0.2);}
+.btn:active{transform:translateY(0);}
+.btn-money{background:rgba(16,224,163,0.14); border-color:rgba(16,224,163,0.3); color:var(--accent-money);}
+.btn-waiver{background:rgba(124,140,255,0.14); border-color:rgba(124,140,255,0.3); color:var(--accent-info);}
+.btn-primary{background:linear-gradient(135deg, var(--accent-money), #0bb98c); color:#04140f; border:none; font-weight:600;}
+.btn-danger{background:rgba(245,85,107,0.14); border-color:rgba(245,85,107,0.3); color:var(--accent-danger);}
+.btn-ghost{background:transparent;}
+.btn-sm{padding:6px 10px; font-size:11.5px;}
+.btn:disabled{opacity:.45; cursor:not-allowed; transform:none;}
+
+/* ============================================================
+   GENERIC PANEL / GRID LAYOUTS
+   ============================================================ */
+.two-col{display:grid; grid-template-columns:1.3fr 1fr; gap:16px; align-items:start;}
+.panel{padding:20px;}
+.panel-title{font-family:var(--font-display); font-weight:600; font-size:15px; margin-bottom:4px;}
+.panel-sub{font-size:12px; color:var(--text-lo); margin-bottom:16px;}
+
+/* --- Scanner --- */
+.dropzone{
+  border:1.5px dashed var(--glass-border); border-radius:var(--radius-md); padding:30px 18px;
+  text-align:center; cursor:pointer; transition:border-color .15s, background .15s;
+}
+.dropzone:hover, .dropzone.dragover{border-color:var(--accent-money); background:rgba(16,224,163,0.05);}
+.dropzone svg{width:30px; height:30px; opacity:.5; margin-bottom:8px;}
+.dropzone-title{font-size:13.5px; font-weight:500;}
+.dropzone-sub{font-size:11.5px; color:var(--text-lo); margin-top:3px;}
+#scanPreview{max-width:100%; border-radius:12px; margin-top:14px; display:none; border:1px solid var(--line);}
+#cameraVideo{width:100%; border-radius:12px; display:none; margin-top:14px;}
+.progress-track{height:5px; border-radius:6px; background:var(--glass); overflow:hidden; margin-top:14px; display:none;}
+.progress-fill{height:100%; width:0%; background:linear-gradient(90deg, var(--accent-info), var(--accent-money)); transition:width .2s;}
+.ocr-field{display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid var(--line); font-size:13px;}
+.ocr-field:last-child{border-bottom:none;}
+.ocr-field span{color:var(--text-lo);}
+.ocr-field b{font-family:var(--font-mono);}
+.match-bar-track{height:8px; border-radius:6px; background:var(--glass); overflow:hidden; margin:6px 0 2px;}
+.match-bar-fill{height:100%; border-radius:6px; background:linear-gradient(90deg,var(--accent-risk),var(--accent-money));}
+.match-row{
+  display:flex; justify-content:space-between; align-items:center; padding:10px 12px; border-radius:10px;
+  border:1px solid var(--line); margin-bottom:8px; cursor:pointer; transition:border-color .15s, background .15s;
+}
+.match-row:hover{border-color:var(--accent-money);}
+.match-row.selected{border-color:var(--accent-money); background:rgba(16,224,163,0.06);}
+.match-pct{font-family:var(--font-mono); font-weight:700; font-size:13px;}
+
+/* --- Rule builder --- */
+.rule-block{
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:10px 12px;
+  border:1px solid var(--line); border-radius:12px; margin-bottom:9px; background:var(--glass);
+}
+.rule-tag{
+  font-family:var(--font-mono); font-size:10.5px; font-weight:700; padding:3px 8px; border-radius:6px;
+  text-transform:uppercase; letter-spacing:.05em;
+}
+.rule-tag.if{background:rgba(124,140,255,0.18); color:var(--accent-info);}
+.rule-tag.and{background:rgba(245,165,36,0.18); color:var(--accent-risk);}
+.rule-tag.then{background:rgba(16,224,163,0.18); color:var(--accent-money);}
+select, input[type=text], input[type=number]{
+  background:var(--bg-panel); border:1px solid var(--glass-border); color:var(--text-hi);
+  padding:7px 10px; border-radius:8px; font-size:12.5px; font-family:var(--font-body);
+}
+select:focus, input:focus{outline:2px solid var(--accent-money); outline-offset:1px;}
+.rule-remove{margin-left:auto; cursor:pointer; color:var(--text-lo); background:none; border:none; font-size:16px; line-height:1;}
+.rule-remove:hover{color:var(--accent-danger);}
+.saved-rule{padding:13px 15px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; gap:10px;}
+.saved-rule-code{font-family:var(--font-mono); font-size:11.5px; color:var(--text-mid); line-height:1.6;}
+.toggle{width:36px; height:20px; border-radius:20px; background:var(--glass-strong); position:relative; cursor:pointer; flex:none; border:1px solid var(--glass-border);}
+.toggle.on{background:rgba(16,224,163,0.35);}
+.toggle::after{content:''; position:absolute; width:14px; height:14px; border-radius:50%; background:var(--text-hi); top:2px; left:2px; transition:left .15s;}
+.toggle.on::after{left:18px; background:var(--accent-money);}
+
+/* --- Live payments --- */
+.qr-wrap{display:flex; flex-direction:column; align-items:center; padding:22px;}
+#qrcode{background:#fff; padding:14px; border-radius:14px;}
+.qr-amount-input{display:flex; align-items:center; gap:8px; margin:14px 0;}
+.qr-amount-input input{width:120px; font-family:var(--font-mono); font-size:16px; text-align:center;}
+.ticker{max-height:330px; overflow-y:auto;}
+.ticker-row{
+  display:flex; align-items:center; gap:10px; padding:10px 6px; border-bottom:1px solid var(--line);
+  font-size:12.5px; animation:tickIn .4s ease;
+}
+@keyframes tickIn{ from{opacity:0; transform:translateX(10px);} to{opacity:1; transform:translateX(0);} }
+.ticker-icon{width:28px; height:28px; border-radius:8px; background:rgba(16,224,163,0.14); color:var(--accent-money); display:flex; align-items:center; justify-content:center; flex:none; font-size:13px;}
+.ticker-amt{margin-left:auto; font-family:var(--font-mono); font-weight:700; color:var(--accent-money);}
+#confettiCanvas{position:fixed; inset:0; pointer-events:none; z-index:999;}
+#revenueChart{max-height:270px;}
+
+/* --- Offline ledger --- */
+.queue-row{display:flex; align-items:center; gap:12px; padding:11px 12px; border:1px solid var(--line); border-radius:10px; margin-bottom:8px;}
+.queue-status{font-family:var(--font-mono); font-size:10px; padding:3px 8px; border-radius:6px; text-transform:uppercase;}
+.queue-status.pending{background:rgba(245,165,36,0.16); color:var(--accent-risk);}
+.queue-status.synced{background:rgba(16,224,163,0.16); color:var(--accent-money);}
+.queue-status.conflict{background:rgba(245,85,107,0.16); color:var(--accent-danger);}
+
+/* --- Modal --- */
+.modal-overlay{
+  position:fixed; inset:0; background:rgba(4,7,14,0.72); backdrop-filter:blur(6px);
+  display:none; align-items:center; justify-content:center; z-index:200; padding:20px;
+}
+.modal-overlay.open{display:flex;}
+.modal{width:100%; max-width:560px; padding:26px; max-height:86vh; overflow-y:auto;}
+.modal-title{font-family:var(--font-display); font-size:18px; font-weight:600; margin-bottom:6px;}
+.modal-sub{font-size:12.5px; color:var(--text-lo); margin-bottom:18px;}
+.conflict-col{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;}
+.conflict-box{padding:14px; border-radius:12px;}
+.conflict-box h4{margin:0 0 8px; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-lo);}
+.conflict-box .amt{font-family:var(--font-mono); font-size:20px; font-weight:700; color:var(--accent-money);}
+.toast-stack{position:fixed; bottom:20px; right:20px; display:flex; flex-direction:column; gap:8px; z-index:500;}
+.toast{padding:12px 16px; border-radius:12px; font-size:13px; display:flex; align-items:center; gap:8px; animation:fadeUp .3s ease; box-shadow:0 8px 24px rgba(0,0,0,.35);}
+
+.empty{text-align:center; padding:40px 20px; color:var(--text-lo); font-size:13px;}
+
+@media (max-width: 900px){
+  .shell{grid-template-columns:1fr;}
+  .sidebar{position:relative; height:auto; flex-direction:row; overflow-x:auto; align-items:center;}
+  .nav{flex-direction:row;}
+  .conn-card{display:none;}
+  .pulse-rail{left:0;}
+  .metric-grid{grid-template-columns:repeat(2,1fr);}
+  .two-col{grid-template-columns:1fr;}
+}
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;}
+}
+</style>
+</head>
+<body>
+
+<canvas id="confettiCanvas"></canvas>
+<div class="pulse-rail"></div>
+
+<div class="shell">
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark" style="overflow: hidden; padding: 4px; background: rgba(255, 255, 255, 0.1);">
+        <img src="logo.jpeg" alt="SchoolFin Logo" style="width: 100%; height: 100%; object-fit: contain;" onerror="this.style.display='none'; this.parentElement.innerHTML='SF';">
+      </div>
+      <div>
+        <div class="brand-text">SCHOOLFIN</div>
+        <div class="brand-sub">FEE DESK</div>
+      </div>
+    </div>
+
+    <nav class="nav" id="navList">
+      <div class="nav-item active" data-view="dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+        Dashboard
+        <span class="badge" id="navHighRisk">0</span>
+      </div>
+      <div class="nav-item" data-view="scanner">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8V6a2 2 0 0 1 2-2h2M4 16v2a2 2 0 0 0 2 2h2M20 8V6a2 2 0 0 0-2-2h-2M20 16v2a2 2 0 0 1-2 2h-2"/><circle cx="12" cy="12" r="3.5"/></svg>
+        Cheque Scanner
+      </div>
+      <div class="nav-item" data-view="rules">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h10M4 18h13"/><circle cx="19" cy="12" r="1.6"/><circle cx="16" cy="18" r="1.6"/></svg>
+        Rule Builder
+      </div>
+      <div class="nav-item" data-view="payments">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M7 15h4"/></svg>
+        Live Payments
+      </div>
+      <div class="nav-item" data-view="ledger">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+        Offline Ledger
+        <span class="badge" id="navQueueCount">0</span>
+      </div>
+    </nav>
+
+    <div class="conn-card glass-strong">
+      <div class="conn-row"><span class="conn-dot" id="connDot"></span><span id="connLabel">Online</span></div>
+      <div class="conn-mode" id="modeLabel">MOCK MODE</div>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main">
+
+    <!-- ===================== DASHBOARD ===================== -->
+    <section class="view active" id="view-dashboard">
+      <div class="topbar">
+        <div>
+          <div class="page-title">Admin Dashboard</div>
+          <div class="page-sub">Realtime collections &amp; defaulter risk overview</div>
+        </div>
+        <div class="topbar-right">
+          <div class="pill glass" id="lastUpdatedPill">● live</div>
+        </div>
+      </div>
+
+      <div class="metric-grid">
+        <div class="metric-card glass">
+          <div class="metric-glow" style="background:var(--accent-money);"></div>
+          <div class="metric-label">Collected Today</div>
+          <div class="metric-value money" id="metricCollected">₹0</div>
+          <div class="metric-delta" id="metricCollectedDelta">0 transactions today</div>
+        </div>
+        <div class="metric-card glass">
+          <div class="metric-glow" style="background:var(--accent-info);"></div>
+          <div class="metric-label">Pending Balance</div>
+          <div class="metric-value" id="metricPending">₹0</div>
+          <div class="metric-delta" id="metricPendingDelta">across all students</div>
+        </div>
+        <div class="metric-card glass">
+          <div class="metric-glow" style="background:var(--accent-danger);"></div>
+          <div class="metric-label">High Risk Students</div>
+          <div class="metric-value danger" id="metricHighRisk">0</div>
+          <div class="metric-delta">risk score ≥ 60</div>
+        </div>
+        <div class="metric-card glass">
+          <div class="metric-glow" style="background:var(--accent-risk);"></div>
+          <div class="metric-label">Offline Queue</div>
+          <div class="metric-value risk" id="metricQueue">0</div>
+          <div class="metric-delta">pending local sync</div>
+        </div>
+      </div>
+
+      <div class="section-head">
+        <div>
+          <div class="section-title">Prioritized Defaulter Risk Matrix</div>
+          <div class="section-sub">risk = 1.5×days overdue + balance/1000 + 6×reminders ignored, capped at 100</div>
+        </div>
+        <div style="display:flex; gap:6px;">
+          <div class="sort-chip glass active" data-sort="risk">Sort: Risk</div>
+          <div class="sort-chip glass" data-sort="balance">Sort: Balance</div>
+          <div class="sort-chip glass" data-sort="overdue">Sort: Overdue</div>
+        </div>
+      </div>
+      <div class="risk-grid" id="riskGrid"></div>
+    </section>
+
+    <!-- ===================== SCANNER ===================== -->
+    <section class="view" id="view-scanner">
+      <div class="topbar">
+        <div>
+          <div class="page-title">Cheque &amp; Receipt Scanner</div>
+          <div class="page-sub">OCR extraction with auto-match against outstanding invoices</div>
+        </div>
+        <button class="btn btn-money" id="btnDemoSampleOCR">⚡ Load Sample Cheque (Demo)</button>
+      </div>
+
+      <div class="two-col">
+        <div class="glass panel">
+          <div class="panel-title">1. Capture or Upload</div>
+          <div class="panel-sub">Use your camera or upload a photo of a cheque / cash receipt</div>
+
+          <div style="display:flex; gap:8px; margin-bottom:12px;">
+            <button class="btn btn-primary" id="btnStartCamera">📷 Use Camera</button>
+            <button class="btn" id="btnUploadTrigger">⬆ Upload File</button>
+            <input type="file" id="fileInput" accept="image/*" style="display:none;">
+          </div>
+
+          <video id="cameraVideo" autoplay playsinline></video>
+          <button class="btn btn-money" id="btnCapture" style="display:none; margin-top:10px;">Capture Frame</button>
+
+          <div class="dropzone" id="dropzone">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+            <div class="dropzone-title">Drop image here or click to browse</div>
+            <div class="dropzone-sub">JPEG / PNG — cheque or cash receipt</div>
+          </div>
+
+          <img id="scanPreview">
+          <div class="progress-track" id="progressTrack"><div class="progress-fill" id="progressFill"></div></div>
+          <div style="font-size:11.5px; color:var(--text-lo); margin-top:6px;" id="ocrStatusLine"></div>
+        </div>
+
+        <div class="glass panel">
+          <div class="panel-title">2. Extracted Fields</div>
+          <div class="panel-sub">Parsed via Tesseract.js — confirm before matching</div>
+          <div id="ocrFields">
+            <div class="ocr-field"><span>Cheque Number</span><b id="fCheque">—</b></div>
+            <div class="ocr-field"><span>Amount</span><b id="fAmount">—</b></div>
+            <div class="ocr-field"><span>Date</span><b id="fDate">—</b></div>
+            <div class="ocr-field"><span>Payer Name</span><b id="fPayer">—</b></div>
+          </div>
+
+          <div class="panel-title" style="margin-top:20px;">3. Auto-Match Engine</div>
+          <div class="panel-sub">Ranked by confidence against student &amp; invoice records</div>
+          <div id="matchResults"><div class="empty">Scan a document or click "Load Sample Cheque"</div></div>
+
+          <button class="btn btn-primary" id="btnConfirmMatch" style="width:100%; justify-content:center; margin-top:14px;" disabled>
+            ✓ Confirm Match &amp; Clear Fee
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== RULE BUILDER ===================== -->
+    <section class="view" id="view-rules">
+      <div class="topbar">
+        <div>
+          <div class="page-title">Visual Fee &amp; Penalty Rule Builder</div>
+          <div class="page-sub">Block-based conditional logic, persisted to <code>fee_rules</code></div>
+        </div>
+        <button class="btn btn-primary" id="btnExecuteRules">⚡ Execute All Active Rules</button>
+      </div>
+
+      <div class="two-col">
+        <div class="glass panel">
+          <div class="panel-title">Build a Rule</div>
+          <input type="text" id="ruleName" placeholder="Rule name (e.g. Late Overdue Penalty)" style="width:100%; margin-bottom:14px;">
+
+          <div class="rule-block">
+            <span class="rule-tag if">IF</span>
+            <select id="cond1Field">
+              <option value="days_overdue">Days Overdue</option>
+              <option value="balance">Balance</option>
+              <option value="reminders_ignored">Reminders Ignored</option>
+              <option value="risk_score">Risk Score</option>
+            </select>
+            <select id="cond1Op">
+              <option value=">">&gt;</option>
+              <option value=">=">&ge;</option>
+              <option value="<">&lt;</option>
+              <option value="=">=</option>
+            </select>
+            <input type="number" id="cond1Value" value="5" style="width:80px;">
+          </div>
+
+          <div class="rule-block">
+            <span class="rule-tag and">AND</span>
+            <select id="cond2Field">
+              <option value="status">Student Status</option>
+              <option value="days_overdue">Days Overdue</option>
+              <option value="reminders_ignored">Reminders Ignored</option>
+              <option value="risk_score">Risk Score</option>
+            </select>
+            <select id="cond2Op">
+              <option value="!=">≠</option>
+              <option value="=">=</option>
+              <option value=">">&gt;</option>
+              <option value=">=">&ge;</option>
+              <option value="<">&lt;</option>
+            </select>
+            <span id="cond2ValueWrap"></span>
+          </div>
+
+          <div class="rule-block">
+            <span class="rule-tag then">THEN</span>
+            <select id="actionType">
+              <option value="compound_penalty">Apply Compound Penalty</option>
+              <option value="flat_penalty">Apply Flat Penalty</option>
+              <option value="flag_defaulter">Flag as Defaulter</option>
+              <option value="send_reminder">Send Reminder</option>
+            </select>
+            <input type="number" id="actionValue" value="2" style="width:70px;">
+            <span style="font-size:12px; color:var(--text-lo);">%</span>
+          </div>
+
+          <button class="btn btn-primary" id="btnSaveRule" style="width:100%; justify-content:center; margin-top:8px;">+ Save Rule to Database</button>
+        </div>
+
+        <div class="glass panel">
+          <div class="panel-title">Active Rules</div>
+          <div class="panel-sub">Stored in <code>fee_rules</code> — toggle to enable/disable</div>
+          <div id="savedRulesList"></div>
+          <div id="ruleExecLog" style="margin-top:14px; font-family:var(--font-mono); font-size:11.5px; color:var(--text-lo); max-height:160px; overflow-y:auto;"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== LIVE PAYMENTS ===================== -->
+    <section class="view" id="view-payments">
+      <div class="topbar">
+        <div>
+          <div class="page-title">Omnichannel Payments</div>
+          <div class="page-sub">Zero-fee UPI intent · live counter-top mode</div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="glass panel">
+          <div class="panel-title">UPI Intent QR</div>
+          <div class="panel-sub">Generates a <code>upi://pay</code> deep link — no gateway fee</div>
+          <div class="qr-wrap">
+            <div id="qrcode"></div>
+            <div class="qr-amount-input">
+              <span style="color:var(--text-lo); font-size:13px;">₹</span>
+              <input type="number" id="qrAmount" value="2500">
+              <button class="btn btn-money btn-sm" id="btnRegenQR">Refresh QR</button>
+            </div>
+            <select id="qrStudent" style="width:100%; margin-bottom:10px;"></select>
+            <button class="btn btn-primary" id="btnDemoPay" style="width:100%; justify-content:center;">
+              💳 Simulate Payment Received
+            </button>
+          </div>
+        </div>
+
+        <div class="glass panel">
+          <div class="panel-title">Revenue — Today</div>
+          <canvas id="revenueChart"></canvas>
+        </div>
+      </div>
+
+      <div class="glass panel" style="margin-top:16px;">
+        <div class="panel-title">Live Transaction Ticker</div>
+        <div class="panel-sub">Bound to Supabase Realtime <code>postgres_changes</code> on <code>transactions</code></div>
+        <div class="ticker" id="ticker"><div class="empty">Waiting for transactions…</div></div>
+      </div>
+    </section>
+
+    <!-- ===================== OFFLINE LEDGER ===================== -->
+    <section class="view" id="view-ledger">
+      <div class="topbar">
+        <div>
+          <div class="page-title">Offline-First Conflict Resolution Ledger</div>
+          <div class="page-sub">IndexedDB queue · <code>feeLedgerDB</code></div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn" id="btnSimOffline">🔴 Simulate Offline</button>
+          <button class="btn btn-primary" id="btnSyncNow">⟲ Sync Now</button>
+        </div>
+      </div>
+
+      <div class="glass panel">
+        <div class="panel-title">Add Offline Transaction</div>
+        <div class="panel-sub">Recorded to IndexedDB immediately, synced when back online</div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <select id="offlineStudent" style="min-width:200px;"></select>
+          <input type="number" id="offlineAmount" placeholder="Amount" style="width:120px;">
+          <select id="offlineMethod">
+            <option value="cash">Cash</option>
+            <option value="cheque">Cheque</option>
+            <option value="upi">UPI</option>
+          </select>
+          <button class="btn btn-primary" id="btnQueueTxn">+ Queue Transaction</button>
+        </div>
+      </div>
+
+      <div class="section-head">
+        <div class="section-title">Local Queue</div>
+        <div class="section-sub" id="queueSummary">0 pending</div>
+      </div>
+      <div id="queueList"></div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ============ SYNC CONFLICT MODAL ============ -->
+<div class="modal-overlay" id="conflictModal">
+  <div class="modal glass-strong">
+    <div class="modal-title">⚠ Sync Conflict Detected</div>
+    <div class="modal-sub" id="conflictSub">Another device recorded a payment for this student while offline.</div>
+    <div class="conflict-col">
+      <div class="conflict-box glass">
+        <h4>Your Offline Record</h4>
+        <div class="amt" id="conflictMineAmt">₹0</div>
+        <div style="font-size:11.5px; color:var(--text-lo); margin-top:4px;" id="conflictMineMeta"></div>
+      </div>
+      <div class="conflict-box glass">
+        <h4>Server Record</h4>
+        <div class="amt" id="conflictServerAmt">₹0</div>
+        <div style="font-size:11.5px; color:var(--text-lo); margin-top:4px;" id="conflictServerMeta"></div>
+      </div>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <button class="btn btn-money" style="flex:1; justify-content:center;" id="btnKeepMine">Keep Mine</button>
+      <button class="btn btn-waiver" style="flex:1; justify-content:center;" id="btnKeepServer">Keep Server's</button>
+      <button class="btn btn-primary" style="flex:1; justify-content:center;" id="btnMergeBoth">Merge Both</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-stack" id="toastStack"></div>
+
+<script>
+/* ==================================================================
+   0. CONFIG & SUPABASE CLIENT
+   ================================================================== */
+const SUPABASE_URL = "https://xpvetqvygxgmsugrcmpy.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhwdmV0cXZ5Z3hnbXN1Z3JjbXB5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4MTYzODQsImV4cCI6MjEwMDM5MjM4NH0.eC1QIpoMMBaiwrjAt5NNJH8oNOBM5xjqc5yZrmcA7-0";
+
+const isConfigured = SUPABASE_URL && SUPABASE_URL.startsWith("https://") && SUPABASE_ANON_KEY && SUPABASE_ANON_KEY.length > 20;
+let supabaseClient = null;
+if (isConfigured) {
+  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
+document.getElementById('modeLabel').textContent = isConfigured ? 'LIVE SUPABASE' : 'MOCK MODE (offline demo)';
+
+/* ==================================================================
+   1. STATE
+   ================================================================== */
+let STATE = {
+  students: [],
+  transactions: [],
+  feeRules: [],
+  outbox: [],       // pending IndexedDB queue mirrored in memory
+  isOnline: navigator.onLine,
+  ocrExtracted: null,
+  selectedMatch: null,
+  chart: null,
+  todayCollected: 0,
+  todayTxnCount: 0,
+};
+
+function uid(){ return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+  const r = Math.random()*16|0, v = c==='x' ? r : (r&0x3|0x8); return v.toString(16);
+});}
+
+function money(n){ return '₹' + Number(n||0).toLocaleString('en-IN', {maximumFractionDigits:0}); }
+
+function toast(msg, kind='money'){
+  const el = document.createElement('div');
+  el.className = 'toast glass-strong';
+  const colors = {money:'var(--accent-money)', danger:'var(--accent-danger)', info:'var(--accent-info)'};
+  el.style.borderLeft = `3px solid ${colors[kind]||colors.money}`;
+  el.innerHTML = msg;
+  document.getElementById('toastStack').appendChild(el);
+  setTimeout(()=>{ el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(),300); }, 3600);
+}
+
+/* ==================================================================
+   2. MOCK DATA GENERATORS (Rich dummy data layer)
+   ================================================================== */
+function riskScore(s){
+  return Math.min(100, (s.days_overdue*1.5) + (Math.min(s.balance,100000)/1000) + (s.reminders_ignored*6));
+}
+function riskTier(score){
+  if (score >= 60) return 'severe';
+  if (score >= 30) return 'moderate';
+  return 'low';
+}
+
+function generateMockStudents(){
+  const names = ['Aarav Mehta','Diya Sharma','Vihaan Iyer','Ananya Reddy','Kabir Nair','Ishita Rao',
+    'Reyansh Gupta','Myra Pillai','Arjun Verma','Sara Khan','Vivaan Joshi','Anika Menon',
+    'Advait Kulkarni','Riya Chatterjee','Dhruv Malhotra'];
+  const grades = ['Grade 3-A','Grade 4-B','Grade 5-A','Grade 6-C','Grade 7-B','Grade 8-A'];
+  return names.map((name,i)=>{
+    const balance = Math.round([0,4500,12000,800,18500,0,25000,3200,0,9800,15600,0,32000,6100,1200][i]);
+    const days_overdue = balance===0 ? 0 : [0,12,45,3,60,0,90,8,0,22,55,0,120,15,5][i];
+    const reminders_ignored = balance===0 ? 0 : Math.min(6, Math.round(days_overdue/15));
+    return {
+      id: uid(), name, grade: grades[i%grades.length],
+      parent_name: name.split(' ')[1] + ' ' + name.split(' ')[0][0] + '. (Parent)',
+      phone: '+91 9' + String(100000000 + i*7654321).slice(0,8),
+      balance, days_overdue, reminders_ignored,
+      status: balance===0 ? 'cleared' : (days_overdue>60 ? 'defaulter' : 'active'),
+    };
+  }).map(s => ({...s, risk_score: riskScore(s)}));
+}
+
+function generateMockFeeRules(){
+  return [
+    {
+      id: uid(),
+      name: 'Late Penalty (>15 Days Overdue)',
+      conditions: [
+        { field: 'days_overdue', op: '>', value: 15 },
+        { field: 'status', op: '!=', value: 'waiver_approved' }
+      ],
+      action: { type: 'compound_penalty', value: 2, unit: 'percent' },
+      is_active: true,
+      created_at: new Date().toISOString()
+    },
+    {
+      id: uid(),
+      name: 'Severe Defaulter Escalation',
+      conditions: [
+        { field: 'days_overdue', op: '>=', value: 60 },
+        { field: 'reminders_ignored', op: '>=', value: 3 }
+      ],
+      action: { type: 'flag_defaulter', value: 0, unit: 'percent' },
+      is_active: true,
+      created_at: new Date().toISOString()
+    }
+  ];
+}
+
+function generateMockTransactions(students){
+  const now = Date.now();
+  return [
+    {
+      id: uid(),
+      student_id: students[1]?.id || uid(),
+      amount: 4500,
+      payment_method: 'upi',
+      status: 'completed',
+      client_uuid: uid(),
+      source: 'online',
+      created_at: new Date(now - 1000 * 60 * 35).toISOString()
+    },
+    {
+      id: uid(),
+      student_id: students[4]?.id || uid(),
+      amount: 12000,
+      payment_method: 'cheque',
+      status: 'completed',
+      client_uuid: uid(),
+      source: 'ocr_match',
+      created_at: new Date(now - 1000 * 60 * 15).toISOString()
+    },
+    {
+      id: uid(),
+      student_id: students[3]?.id || uid(),
+      amount: 800,
+      payment_method: 'cash',
+      status: 'completed',
+      client_uuid: uid(),
+      source: 'offline_sync',
+      created_at: new Date(now - 1000 * 60 * 5).toISOString()
+    }
+  ];
+}
+
+/* ==================================================================
+   3. DATA LAYER
+   ================================================================== */
+async function loadStudents(){
+  if (supabaseClient){
+    const { data, error } = await supabaseClient.from('students').select('*').order('risk_score', {ascending:false});
+    if (error){ toast('Failed to load students: '+error.message, 'danger'); return; }
+    STATE.students = data || [];
+  } else {
+    if (STATE.students.length === 0) STATE.students = generateMockStudents();
+  }
+}
+
+async function loadFeeRules(){
+  if (supabaseClient){
+    const { data, error } = await supabaseClient.from('fee_rules').select('*').order('created_at', {ascending:false});
+    if (!error) STATE.feeRules = data || [];
+  } else {
+    if (STATE.feeRules.length === 0) STATE.feeRules = generateMockFeeRules();
+  }
+}
+
+async function insertTransaction(txn){
+  if (supabaseClient){
+    const { data, error } = await supabaseClient.from('transactions').insert(txn).select().single();
+    if (error) throw error;
+    return data;
+  } else {
+    const row = {...txn, id: uid(), created_at: new Date().toISOString()};
+    STATE.transactions.unshift(row);
+    const student = STATE.students.find(s => s.id === txn.student_id);
+    if (student){
+      student.balance = Math.max(0, student.balance - txn.amount);
+      student.risk_score = riskScore(student);
+      if (student.balance === 0){ student.status = 'cleared'; student.days_overdue = 0; student.reminders_ignored = 0; }
+    }
+    handleNewTransactionUI(row, student);
+    return row;
+  }
+}
+
+async function updateStudent(id, patch){
+  if (supabaseClient){
+    const { error } = await supabaseClient.from('students').update(patch).eq('id', id);
+    if (error) toast('Update failed: '+error.message, 'danger');
+  } else {
+    const s = STATE.students.find(s=>s.id===id);
+    if (s) Object.assign(s, patch);
+  }
+}
+
+async function insertFeeRule(rule){
+  if (supabaseClient){
+    const { data, error } = await supabaseClient.from('fee_rules').insert(rule).select().single();
+    if (error){ toast('Save failed: '+error.message,'danger'); return null; }
+    STATE.feeRules.unshift(data);
+    return data;
+  } else {
+    const row = {...rule, id: uid(), created_at: new Date().toISOString(), is_active:true};
+    STATE.feeRules.unshift(row);
+    return row;
+  }
+}
+
+async function writeAuditLog(action_type, metadata){
+  if (supabaseClient){
+    await supabaseClient.from('audit_logs').insert({action_type, metadata});
+  }
+  console.log('[audit log]', action_type, metadata);
+}
+
+/* ==================================================================
+   4. NAVIGATION
+   ================================================================== */
+document.querySelectorAll('.nav-item').forEach(item=>{
+  item.addEventListener('click', ()=>{
+    document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    item.classList.add('active');
+    document.getElementById('view-'+item.dataset.view).classList.add('active');
+  });
+});
+
+/* ==================================================================
+   5. DASHBOARD — metrics + risk matrix
+   ================================================================== */
+let currentSort = 'risk';
+document.querySelectorAll('.sort-chip').forEach(chip=>{
+  chip.addEventListener('click', ()=>{
+    document.querySelectorAll('.sort-chip').forEach(c=>c.classList.remove('active'));
+    chip.classList.add('active');
+    currentSort = chip.dataset.sort;
+    renderRiskMatrix();
+  });
+});
+
+function renderMetrics(){
+  const pending = STATE.students.reduce((a,s)=>a+s.balance,0);
+  const highRisk = STATE.students.filter(s=>riskScore(s)>=60).length;
+  document.getElementById('metricCollected').textContent = money(STATE.todayCollected);
+  document.getElementById('metricCollectedDelta').textContent = `${STATE.todayTxnCount} transaction${STATE.todayTxnCount===1?'':'s'} today`;
+  document.getElementById('metricPending').textContent = money(pending);
+  document.getElementById('metricHighRisk').textContent = highRisk;
+  document.getElementById('metricQueue').textContent = STATE.outbox.filter(o=>o.syncStatus==='pending').length;
+  document.getElementById('navHighRisk').textContent = highRisk;
+  document.getElementById('navQueueCount').textContent = STATE.outbox.filter(o=>o.syncStatus==='pending').length;
+}
+
+function renderRiskMatrix(){
+  const grid = document.getElementById('riskGrid');
+  let list = STATE.students.filter(s=>s.balance>0).map(s=>({...s, risk_score: riskScore(s)}));
+  if (currentSort==='risk') list.sort((a,b)=>b.risk_score-a.risk_score);
+  if (currentSort==='balance') list.sort((a,b)=>b.balance-a.balance);
+  if (currentSort==='overdue') list.sort((a,b)=>b.days_overdue-a.days_overdue);
+
+  if (list.length===0){ grid.innerHTML = '<div class="empty">No outstanding balances — all clear 🎉</div>'; return; }
+
+  grid.innerHTML = list.map(s=>{
+    const tier = riskTier(s.risk_score);
+    return `
+    <div class="risk-card glass ${tier}" data-id="${s.id}">
+      <div class="risk-top">
+        <div>
+          <div class="risk-name">${s.name}</div>
+          <div class="risk-meta">${s.grade} · ${s.parent_name||''}</div>
+        </div>
+        <div class="risk-score-badge ${tier}">${s.risk_score.toFixed(0)}</div>
+      </div>
+      <div class="risk-stats">
+        <div class="risk-stat"><b>${money(s.balance)}</b><span>Balance</span></div>
+        <div class="risk-stat"><b>${s.days_overdue}d</b><span>Overdue</span></div>
+        <div class="risk-stat"><b>${s.reminders_ignored}</b><span>Ignored</span></div>
+      </div>
+      <div class="risk-actions">
+        <button class="btn btn-money btn-sm" data-action="whatsapp" data-id="${s.id}">📲 Send UPI via WhatsApp</button>
+        <button class="btn btn-waiver btn-sm" data-action="waiver" data-id="${s.id}">🏷 5% Waiver</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  grid.querySelectorAll('[data-action="whatsapp"]').forEach(btn=>{
+    btn.addEventListener('click', ()=>sendUPIViaWhatsApp(btn.dataset.id));
+  });
+  grid.querySelectorAll('[data-action="waiver"]').forEach(btn=>{
+    btn.addEventListener('click', ()=>applyWaiver(btn.dataset.id));
+  });
+}
+
+function sendUPIViaWhatsApp(studentId){
+  const s = STATE.students.find(x=>x.id===studentId);
+  if (!s) return;
+  const upiLink = `upi://pay?pa=school@upi&pn=SchoolFin&am=${s.balance}&cu=INR&tn=Fee%20for%20${encodeURIComponent(s.name)}`;
+  const waText = encodeURIComponent(`Hi ${s.parent_name||''}, a fee balance of ${money(s.balance)} is due for ${s.name}. Pay instantly via UPI: ${upiLink}`);
+  const phone = (s.phone||'').replace(/\D/g,'');
+  window.open(`https://wa.me/${phone}?text=${waText}`, '_blank');
+  writeAuditLog('reminder_sent', {student_id: s.id, channel:'whatsapp'});
+  toast(`📲 UPI link drafted for <b>${s.name}</b>`, 'info');
+}
+
+async function applyWaiver(studentId){
+  const s = STATE.students.find(x=>x.id===studentId);
+  if (!s) return;
+  const waivedAmount = Math.round(s.balance*0.05);
+  const newBalance = s.balance - waivedAmount;
+  await updateStudent(studentId, {balance:newBalance, status:'waiver_approved'});
+  s.balance = newBalance; s.status='waiver_approved';
+  await writeAuditLog('waiver_applied', {student_id:studentId, waived_amount:waivedAmount});
+  toast(`🏷 5% waiver (${money(waivedAmount)}) applied to <b>${s.name}</b>`);
+  renderRiskMatrix(); renderMetrics(); populateStudentSelectors();
+}
+
+/* ==================================================================
+   6. CHEQUE / RECEIPT OCR SCANNER
+   ================================================================== */
+const fileInput = document.getElementById('fileInput');
+const dropzone = document.getElementById('dropzone');
+const scanPreview = document.getElementById('scanPreview');
+const cameraVideo = document.getElementById('cameraVideo');
+let cameraStream = null;
+
+document.getElementById('btnUploadTrigger').addEventListener('click', ()=>fileInput.click());
+dropzone.addEventListener('click', ()=>fileInput.click());
+dropzone.addEventListener('dragover', e=>{ e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragleave', ()=>dropzone.classList.remove('dragover'));
+dropzone.addEventListener('drop', e=>{
+  e.preventDefault(); dropzone.classList.remove('dragover');
+  if (e.dataTransfer.files[0]) runOCR(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', e=>{
+  if (e.target.files[0]) runOCR(e.target.files[0]);
+});
+
+document.getElementById('btnStartCamera').addEventListener('click', async ()=>{
+  try{
+    cameraStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+    cameraVideo.srcObject = cameraStream;
+    cameraVideo.style.display = 'block';
+    document.getElementById('btnCapture').style.display = 'inline-flex';
+  } catch(err){
+    toast('Camera unavailable — use file upload or sample demo button', 'danger');
+  }
+});
+document.getElementById('btnCapture').addEventListener('click', ()=>{
+  const canvas = document.createElement('canvas');
+  canvas.width = cameraVideo.videoWidth; canvas.height = cameraVideo.videoHeight;
+  canvas.getContext('2d').drawImage(cameraVideo,0,0);
+  canvas.toBlob(blob=>runOCR(blob));
+  cameraStream.getTracks().forEach(t=>t.stop());
+  cameraVideo.style.display='none';
+  document.getElementById('btnCapture').style.display='none';
+});
+
+// Demo button to auto-simulate OCR extraction for quick testing
+document.getElementById('btnDemoSampleOCR').addEventListener('click', ()=>{
+  const kabir = STATE.students.find(s=>s.name.includes('Kabir')) || STATE.students[2];
+  const sampleData = {
+    cheque: '849201',
+    amount: kabir ? kabir.balance : 18500,
+    date: '23/07/2026',
+    payer: kabir ? kabir.parent_name : 'Suresh Nair'
+  };
+  STATE.ocrExtracted = sampleData;
+  document.getElementById('fCheque').textContent = sampleData.cheque;
+  document.getElementById('fAmount').textContent = money(sampleData.amount);
+  document.getElementById('fDate').textContent = sampleData.date;
+  document.getElementById('fPayer').textContent = sampleData.payer;
+  document.getElementById('ocrStatusLine').textContent = 'Sample cheque data loaded. Matches calculated below.';
+  runAutoMatch(sampleData);
+  toast('⚡ Sample Cheque parsed for testing!', 'info');
+});
+
+async function runOCR(fileOrBlob){
+  scanPreview.src = URL.createObjectURL(fileOrBlob);
+  scanPreview.style.display = 'block';
+  const track = document.getElementById('progressTrack');
+  const fill = document.getElementById('progressFill');
+  const statusLine = document.getElementById('ocrStatusLine');
+  track.style.display = 'block'; fill.style.width='0%';
+  statusLine.textContent = 'Initializing OCR engine…';
+
+  try{
+    const result = await Tesseract.recognize(fileOrBlob, 'eng', {
+      logger: m => {
+        if (m.status && m.progress != null){
+          fill.style.width = Math.round(m.progress*100)+'%';
+          statusLine.textContent = `${m.status} — ${Math.round(m.progress*100)}%`;
+        }
+      }
+    });
+    parseOCRText(result.data.text);
+  } catch(err){
+    statusLine.textContent = 'OCR failed — try a clearer image or use the Sample button.';
+    toast('OCR engine error: '+err.message, 'danger');
+  }
+}
+
+function parseOCRText(rawText){
+  const text = rawText.replace(/\s+/g,' ');
+  const cheque = (text.match(/(?:cheque|chq|check)\D{0,10}(\d{6,12})/i) || text.match(/\b(\d{6,12})\b/))?.[1] || '—';
+  const amountMatch = text.match(/(?:rs\.?|inr|₹)\s?([\d,]+(?:\.\d{1,2})?)/i) || text.match(/\b(\d{3,6}(?:\.\d{2})?)\b/);
+  const amount = amountMatch ? parseFloat(amountMatch[1].replace(/,/g,'')) : null;
+  const dateMatch = text.match(/\b(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})\b/);
+  const date = dateMatch ? dateMatch[1] : '—';
+  const nameMatch = text.match(/(?:pay(?:ee)?|name|received from)\s*:?\s*([A-Z][a-zA-Z]+(?:\s[A-Z][a-zA-Z]+){0,2})/);
+  const payer = nameMatch ? nameMatch[1] : (text.match(/\b([A-Z][a-z]+\s[A-Z][a-z]+)\b/)||[])[1] || '—';
+
+  STATE.ocrExtracted = { cheque, amount, date, payer };
+  document.getElementById('fCheque').textContent = cheque;
+  document.getElementById('fAmount').textContent = amount ? money(amount) : '—';
+  document.getElementById('fDate').textContent = date;
+  document.getElementById('fPayer').textContent = payer;
+  document.getElementById('ocrStatusLine').textContent = 'Extraction complete. Review matches below.';
+
+  runAutoMatch(STATE.ocrExtracted);
+}
+
+function runAutoMatch(extracted){
+  const container = document.getElementById('matchResults');
+  const candidates = STATE.students
+    .filter(s=>s.balance>0)
+    .map(s=>{
+      let score = 0;
+      if (extracted.payer && extracted.payer !== '—'){
+        const a = extracted.payer.toLowerCase().split(' ');
+        const b = (s.parent_name||s.name).toLowerCase().split(' ');
+        const overlap = a.filter(tok=>b.some(btok=>btok.includes(tok)||tok.includes(btok))).length;
+        score += (overlap / Math.max(a.length,1)) * 55;
+      }
+      if (extracted.amount){
+        const diff = Math.abs(s.balance - extracted.amount);
+        const closeness = Math.max(0, 1 - diff / Math.max(s.balance,1));
+        score += closeness * 45;
+      } else {
+        score += 15;
+      }
+      return {student:s, score: Math.min(99, Math.round(score))};
+    })
+    .sort((a,b)=>b.score-a.score)
+    .slice(0,4);
+
+  if (candidates.length===0 || candidates[0].score < 5){
+    container.innerHTML = '<div class="empty">No confident matches found</div>';
+    return;
+  }
+
+  container.innerHTML = candidates.map((c,i)=>`
+    <div class="match-row" data-id="${c.student.id}" data-idx="${i}">
+      <div style="flex:1;">
+        <div style="font-weight:600; font-size:13px;">${c.student.name}</div>
+        <div style="font-size:11px; color:var(--text-lo);">${c.student.grade} · Balance ${money(c.student.balance)}</div>
+        <div class="match-bar-track"><div class="match-bar-fill" style="width:${c.score}%;"></div></div>
+      </div>
+      <div class="match-pct" style="color:${c.score>70?'var(--accent-money)':c.score>40?'var(--accent-risk)':'var(--accent-danger)'};">${c.score}%</div>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('.match-row').forEach(row=>{
+    row.addEventListener('click', ()=>{
+      container.querySelectorAll('.match-row').forEach(r=>r.classList.remove('selected'));
+      row.classList.add('selected');
+      STATE.selectedMatch = candidates[row.dataset.idx].student;
+      document.getElementById('btnConfirmMatch').disabled = false;
+    });
+  });
+  container.querySelector('.match-row').click();
+}
+
+document.getElementById('btnConfirmMatch').addEventListener('click', async ()=>{
+  const s = STATE.selectedMatch;
+  const extracted = STATE.ocrExtracted;
+  if (!s || !extracted) return;
+  const amount = extracted.amount || s.balance;
+  try{
+    await insertTransaction({
+      student_id: s.id, invoice_id: null, amount,
+      payment_method: 'cheque', status:'completed',
+      client_uuid: uid(), source:'ocr_match'
+    });
+    await writeAuditLog('ocr_match_confirmed', {student_id:s.id, cheque_number:extracted.cheque, amount});
+    toast(`✓ Cheque matched &amp; fee cleared for <b>${s.name}</b>`);
+    document.getElementById('btnConfirmMatch').disabled = true;
+    renderRiskMatrix(); renderMetrics();
+  } catch(err){
+    toast('Failed to confirm match: '+err.message, 'danger');
+  }
+});
+
+/* ==================================================================
+   7. VISUAL RULE BUILDER
+   ================================================================== */
+function renderSavedRules(){
+  const list = document.getElementById('savedRulesList');
+  if (STATE.feeRules.length===0){ list.innerHTML='<div class="empty">No rules saved yet</div>'; return; }
+  list.innerHTML = STATE.feeRules.map(r=>{
+    const c = r.conditions;
+    const a = r.action;
+    const condText = c.map(cond=>`${cond.field} ${cond.op} ${cond.value}`).join(' AND ');
+    return `
+    <div class="saved-rule glass">
+      <div>
+        <div style="font-weight:600; font-size:13px;">${r.name}</div>
+        <div class="saved-rule-code">IF ${condText}<br>THEN ${a.type} (${a.value}${a.unit==='percent'?'%':''})</div>
+      </div>
+      <div class="toggle ${r.is_active?'on':''}" data-id="${r.id}"></div>
+    </div>`;
+  }).join('');
+  list.querySelectorAll('.toggle').forEach(t=>{
+    t.addEventListener('click', async ()=>{
+      const rule = STATE.feeRules.find(r=>r.id===t.dataset.id);
+      rule.is_active = !rule.is_active;
+      t.classList.toggle('on');
+      if (supabaseClient) await supabaseClient.from('fee_rules').update({is_active:rule.is_active}).eq('id', rule.id);
+    });
+  });
+}
+
+const COND2_STATUS_OPTIONS = [
+  ['active','Active'], ['waiver_approved','Waiver Approved'], ['waiver_pending','Waiver Pending'],
+  ['defaulter','Defaulter'], ['cleared','Cleared']
+];
+function updateCond2ValueInput(){
+  const field = document.getElementById('cond2Field').value;
+  const wrap = document.getElementById('cond2ValueWrap');
+  const opSelect = document.getElementById('cond2Op');
+  if (field === 'status'){
+    wrap.innerHTML = `<select id="cond2Value">${COND2_STATUS_OPTIONS.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select>`;
+    opSelect.innerHTML = `<option value="!=">≠</option><option value="=">=</option>`;
+  } else {
+    wrap.innerHTML = `<input type="number" id="cond2Value" value="0" style="width:80px;">`;
+    opSelect.innerHTML = `<option value=">">&gt;</option><option value=">=">&ge;</option><option value="<">&lt;</option><option value="=">=</option><option value="!=">≠</option>`;
+  }
+}
+document.getElementById('cond2Field').addEventListener('change', updateCond2ValueInput);
+updateCond2ValueInput();
+
+document.getElementById('btnSaveRule').addEventListener('click', async ()=>{
+  const name = document.getElementById('ruleName').value.trim() || 'Untitled Rule';
+  const cond2Field = document.getElementById('cond2Field').value;
+  const cond2RawValue = document.getElementById('cond2Value').value;
+  const conditions = [
+    { field: document.getElementById('cond1Field').value, op: document.getElementById('cond1Op').value, value: Number(document.getElementById('cond1Value').value) },
+    { field: cond2Field, op: document.getElementById('cond2Op').value, value: cond2Field === 'status' ? cond2RawValue : Number(cond2RawValue) },
+  ];
+  const action = { type: document.getElementById('actionType').value, value: Number(document.getElementById('actionValue').value), unit:'percent' };
+  const rule = await insertFeeRule({ name, conditions, action, is_active:true });
+  if (rule){ toast(`Rule "<b>${name}</b>" saved`); renderSavedRules(); document.getElementById('ruleName').value=''; }
+});
+
+function evalCondition(student, cond){
+  const val = student[cond.field];
+  const target = isNaN(cond.value) ? cond.value : Number(cond.value);
+  switch(cond.op){
+    case '>': return val > target;
+    case '>=': return val >= target;
+    case '<': return val < target;
+    case '=': return val === target;
+    case '!=': return val !== target;
+    default: return false;
+  }
+}
+
+document.getElementById('btnExecuteRules').addEventListener('click', async ()=>{
+  const log = document.getElementById('ruleExecLog');
+  const activeRules = STATE.feeRules.filter(r=>r.is_active);
+  if (activeRules.length===0){ toast('No active rules to execute', 'info'); return; }
+  let fired = 0;
+  const lines = [];
+  for (const student of STATE.students){
+    if (student.balance<=0) continue;
+    const enriched = {...student, risk_score: riskScore(student)};
+    for (const rule of activeRules){
+      const matches = rule.conditions.every(c=>evalCondition(enriched, c));
+      if (matches){
+        fired++;
+        let newBalance = student.balance;
+        if (rule.action.type==='compound_penalty' || rule.action.type==='flat_penalty'){
+          const penalty = rule.action.type==='compound_penalty' ? student.balance*(rule.action.value/100) : rule.action.value;
+          newBalance = Math.round(student.balance + penalty);
+          await updateStudent(student.id, {balance:newBalance});
+          student.balance = newBalance;
+        } else if (rule.action.type==='flag_defaulter'){
+          await updateStudent(student.id, {status:'defaulter'});
+          student.status = 'defaulter';
+        }
+        await writeAuditLog('rule_executed', {rule_id:rule.id, student_id:student.id, action:rule.action});
+        lines.push(`[${new Date().toLocaleTimeString()}] "${rule.name}" fired on ${student.name}`);
+      }
+    }
+  }
+  log.innerHTML = lines.reverse().map(l=>`<div>${l}</div>`).join('') + log.innerHTML;
+  toast(`⚡ Rule engine: ${fired} match${fired===1?'':'es'} across active rules`);
+  renderRiskMatrix(); renderMetrics();
+});
+
+/* ==================================================================
+   8. LIVE PAYMENTS — QR, confetti, chart, realtime
+   ================================================================== */
+function populateStudentSelectors(){
+  const opts = STATE.students.filter(s=>s.balance>0).map(s=>`<option value="${s.id}">${s.name} — ${money(s.balance)}</option>`).join('');
+  document.getElementById('qrStudent').innerHTML = opts || '<option>No students with balance</option>';
+  document.getElementById('offlineStudent').innerHTML = STATE.students.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+}
+
+let qrInstance = null;
+function regenerateQR(){
+  const amount = document.getElementById('qrAmount').value || 0;
+  const studentId = document.getElementById('qrStudent').value;
+  const student = STATE.students.find(s=>s.id===studentId);
+  const upiLink = `upi://pay?pa=school@upi&pn=SchoolFin&am=${amount}&cu=INR&tn=Fee${student?('%20'+encodeURIComponent(student.name)):''}`;
+  document.getElementById('qrcode').innerHTML = '';
+  qrInstance = new QRCode(document.getElementById('qrcode'), {
+    text: upiLink, width:180, height:180,
+    colorDark:'#080c16', colorLight:'#ffffff'
+  });
+}
+document.getElementById('btnRegenQR').addEventListener('click', regenerateQR);
+document.getElementById('qrStudent').addEventListener('change', regenerateQR);
+
+document.getElementById('btnDemoPay').addEventListener('click', async ()=>{
+  const studentId = document.getElementById('qrStudent').value;
+  const amount = Number(document.getElementById('qrAmount').value) || 0;
+  const student = STATE.students.find(s=>s.id===studentId);
+  if (!student || amount<=0) return;
+  await insertTransaction({
+    student_id: student.id, invoice_id:null, amount,
+    payment_method:'upi', status:'completed', client_uuid: uid(), source:'online'
+  });
+});
+
+function initChart(){
+  const ctx = document.getElementById('revenueChart');
+  STATE.chart = new Chart(ctx, {
+    type:'line',
+    data:{ 
+      labels:['09:00 AM', '10:30 AM', '11:45 AM'], 
+      datasets:[{
+        label:'Revenue', data:[4500, 16500, 17300], borderColor:'#10e0a3', backgroundColor:'rgba(16,224,163,0.12)',
+        fill:true, tension:0.35, pointRadius:3, pointBackgroundColor:'#10e0a3'
+      }]
+    },
+    options:{
+      responsive:true,
+      plugins:{ legend:{display:false} },
+      scales:{
+        x:{ ticks:{color:'#6b7488', font:{family:'JetBrains Mono', size:10}}, grid:{color:'rgba(255,255,255,0.05)'} },
+        y:{ ticks:{color:'#6b7488', font:{family:'JetBrains Mono', size:10}}, grid:{color:'rgba(255,255,255,0.05)'} }
+      }
+    }
+  });
+}
+
+function handleNewTransactionUI(txn, student){
+  STATE.todayCollected += Number(txn.amount);
+  STATE.todayTxnCount += 1;
+
+  const ticker = document.getElementById('ticker');
+  if (ticker.querySelector('.empty')) ticker.innerHTML = '';
+  const row = document.createElement('div');
+  row.className = 'ticker-row';
+  row.innerHTML = `
+    <div class="ticker-icon">${txn.payment_method==='upi'?'📱':txn.payment_method==='cheque'?'🏦':'💵'}</div>
+    <div>
+      <div style="font-weight:600;">${student?student.name:'Unknown student'}</div>
+      <div style="color:var(--text-lo); font-size:11px;">${(txn.payment_method||'').toUpperCase()} · ${new Date(txn.created_at||Date.now()).toLocaleTimeString()}</div>
+    </div>
+    <div class="ticker-amt">+${money(txn.amount)}</div>`;
+  ticker.prepend(row);
+
+  if (STATE.chart){
+    const label = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    STATE.chart.data.labels.push(label);
+    const prevTotal = STATE.chart.data.datasets[0].data.at(-1) || 0;
+    STATE.chart.data.datasets[0].data.push(prevTotal + Number(txn.amount));
+    if (STATE.chart.data.labels.length > 20){ STATE.chart.data.labels.shift(); STATE.chart.data.datasets[0].data.shift(); }
+    STATE.chart.update();
+  }
+
+  fireConfetti();
+  toast(`💰 Payment received: <b>${money(txn.amount)}</b>`, 'money');
+  renderMetrics(); renderRiskMatrix(); populateStudentSelectors();
+}
+
+/* ---- confetti particle canvas ---- */
+const confettiCanvas = document.getElementById('confettiCanvas');
+const cctx = confettiCanvas.getContext('2d');
+function resizeCanvas(){ confettiCanvas.width = innerWidth; confettiCanvas.height = innerHeight; }
+resizeCanvas(); window.addEventListener('resize', resizeCanvas);
+
+let particles = [];
+function fireConfetti(){
+  const colors = ['#10e0a3','#7c8cff','#f5a524','#eef2fa'];
+  for (let i=0;i<80;i++){
+    particles.push({
+      x: innerWidth/2 + (Math.random()-0.5)*200,
+      y: innerHeight*0.25,
+      vx: (Math.random()-0.5)*8,
+      vy: Math.random()*-8 - 3,
+      size: Math.random()*6+3,
+      color: colors[Math.floor(Math.random()*colors.length)],
+      rot: Math.random()*360,
+      vr: (Math.random()-0.5)*10,
+      life: 100
+    });
+  }
+}
+function animateParticles(){
+  cctx.clearRect(0,0,confettiCanvas.width, confettiCanvas.height);
+  particles.forEach(p=>{
+    p.x += p.vx; p.y += p.vy; p.vy += 0.28; p.rot += p.vr; p.life -= 1.4;
+    cctx.save();
+    cctx.translate(p.x, p.y); cctx.rotate(p.rot*Math.PI/180);
+    cctx.globalAlpha = Math.max(0, p.life/100);
+    cctx.fillStyle = p.color;
+    cctx.fillRect(-p.size/2,-p.size/2,p.size,p.size);
+    cctx.restore();
+  });
+  particles = particles.filter(p=>p.life>0);
+  requestAnimationFrame(animateParticles);
+}
+animateParticles();
+
+/* ---- realtime subscription ---- */
+function initRealtime(){
+  if (!supabaseClient) return;
+  supabaseClient.channel('smartfee-live')
+    .on('postgres_changes', {event:'INSERT', schema:'public', table:'transactions'}, payload=>{
+      const student = STATE.students.find(s=>s.id===payload.new.student_id);
+      handleNewTransactionUI(payload.new, student);
+    })
+    .on('postgres_changes', {event:'UPDATE', schema:'public', table:'students'}, payload=>{
+      const idx = STATE.students.findIndex(s=>s.id===payload.new.id);
+      if (idx>-1) STATE.students[idx] = payload.new;
+      renderRiskMatrix(); renderMetrics();
+    })
+    .subscribe();
+}
+
+/* ==================================================================
+   9. OFFLINE-FIRST INDEXEDDB LEDGER
+   ================================================================== */
+let idb = null;
+function openIDB(){
+  return new Promise((resolve,reject)=>{
+    const req = indexedDB.open('feeLedgerDB', 1);
+    req.onupgradeneeded = e=>{
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('outbox')){
+        db.createObjectStore('outbox', {keyPath:'client_uuid'});
+      }
+    };
+    req.onsuccess = e=>{ idb = e.target.result; resolve(idb); };
+    req.onerror = e=>reject(e);
+  });
+}
+function idbPut(record){
+  return new Promise((resolve,reject)=>{
+    const tx = idb.transaction('outbox','readwrite');
+    tx.objectStore('outbox').put(record);
+    tx.oncomplete = ()=>resolve();
+    tx.onerror = e=>reject(e);
+  });
+}
+function idbGetAll(){
+  return new Promise((resolve,reject)=>{
+    const tx = idb.transaction('outbox','readonly');
+    const req = tx.objectStore('outbox').getAll();
+    req.onsuccess = ()=>resolve(req.result);
+    req.onerror = e=>reject(e);
+  });
+}
+
+async function refreshOutboxState(){
+  STATE.outbox = idb ? await idbGetAll() : [];
+  renderQueue(); renderMetrics();
+}
+
+function renderQueue(){
+  const list = document.getElementById('queueList');
+  const pending = STATE.outbox.filter(o=>o.syncStatus!=='synced');
+  document.getElementById('queueSummary').textContent = `${pending.length} pending`;
+  if (STATE.outbox.length===0){ list.innerHTML = '<div class="empty">Queue is empty</div>'; return; }
+  list.innerHTML = STATE.outbox.slice().reverse().map(o=>{
+    const student = STATE.students.find(s=>s.id===o.student_id);
+    return `
+    <div class="queue-row glass">
+      <span class="queue-status ${o.syncStatus}">${o.syncStatus}</span>
+      <div style="flex:1;">
+        <div style="font-weight:600; font-size:13px;">${student?student.name:'Unknown'} — ${money(o.amount)}</div>
+        <div style="font-size:11px; color:var(--text-lo);">${o.payment_method} · queued ${new Date(o.queued_at).toLocaleTimeString()}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+document.getElementById('btnQueueTxn').addEventListener('click', async ()=>{
+  const student_id = document.getElementById('offlineStudent').value;
+  const amount = Number(document.getElementById('offlineAmount').value);
+  const payment_method = document.getElementById('offlineMethod').value;
+  if (!student_id || !amount) { toast('Select a student and amount', 'danger'); return; }
+  const record = {
+    client_uuid: uid(), student_id, amount, payment_method,
+    status:'completed', source:'offline_sync',
+    syncStatus: STATE.isOnline ? 'pending' : 'pending',
+    queued_at: new Date().toISOString()
+  };
+  await idbPut(record);
+  await refreshOutboxState();
+  toast(`Queued ${money(amount)} for local sync`, 'info');
+  document.getElementById('offlineAmount').value = '';
+  if (STATE.isOnline) syncOutbox();
+});
+
+let wentOfflineAt = null;
+
+async function syncOutbox(){
+  if (!idb) return;
+  const pending = (await idbGetAll()).filter(o=>o.syncStatus==='pending');
+  if (pending.length === 0) return;
+  let syncedCount = 0, conflictCount = 0;
+  for (const record of pending){
+    const recentServerTxn = wentOfflineAt && STATE.transactions.find(t =>
+      t.student_id === record.student_id &&
+      t.source !== 'offline_sync' &&
+      t.client_uuid !== record.client_uuid &&
+      new Date(t.created_at).getTime() > wentOfflineAt
+    );
+    if (recentServerTxn){
+      conflictCount++;
+      openConflictModal(record, recentServerTxn);
+      continue;
+    }
+    try{
+      await insertTransaction({
+        student_id: record.student_id, invoice_id:null, amount: record.amount,
+        payment_method: record.payment_method, status:'completed',
+        client_uuid: record.client_uuid, source:'offline_sync'
+      });
+      record.syncStatus = 'synced';
+      await idbPut(record);
+      await writeAuditLog('offline_txn_synced', {client_uuid:record.client_uuid});
+      syncedCount++;
+    } catch(err){
+      console.error('sync failed', err);
+    }
+  }
+  await refreshOutboxState();
+  if (conflictCount > 0){
+    toast(`⟲ Synced ${syncedCount} · ${conflictCount} conflict${conflictCount===1?'':'s'} need your review`, 'danger');
+  } else if (syncedCount > 0){
+    toast(`⟲ Offline queue synced (${syncedCount})`);
+  }
+}
+
+let activeConflictRecord = null;
+function openConflictModal(mine, serverTxn){
+  activeConflictRecord = mine;
+  const student = STATE.students.find(s=>s.id===mine.student_id);
+  document.getElementById('conflictSub').textContent = `Both records reference ${student?student.name:'this student'} — choose how to resolve.`;
+  document.getElementById('conflictMineAmt').textContent = money(mine.amount);
+  document.getElementById('conflictMineMeta').textContent = `${mine.payment_method} · queued ${new Date(mine.queued_at).toLocaleTimeString()}`;
+  document.getElementById('conflictServerAmt').textContent = money(serverTxn.amount);
+  document.getElementById('conflictServerMeta').textContent = `${serverTxn.payment_method} · ${new Date(serverTxn.created_at).toLocaleTimeString()}`;
+  document.getElementById('conflictModal').classList.add('open');
+}
+function closeConflictModal(){ document.getElementById('conflictModal').classList.remove('open'); activeConflictRecord=null; }
+
+document.getElementById('btnKeepMine').addEventListener('click', async ()=>{
+  if (!activeConflictRecord) return;
+  await insertTransaction({ student_id:activeConflictRecord.student_id, invoice_id:null, amount:activeConflictRecord.amount, payment_method:activeConflictRecord.payment_method, status:'completed', client_uuid:activeConflictRecord.client_uuid, source:'offline_sync' });
+  activeConflictRecord.syncStatus='synced'; await idbPut(activeConflictRecord);
+  await writeAuditLog('sync_conflict_resolved', {resolution:'keep_mine', client_uuid:activeConflictRecord.client_uuid});
+  await refreshOutboxState(); closeConflictModal(); toast('Kept your offline record');
+});
+document.getElementById('btnKeepServer').addEventListener('click', async ()=>{
+  if (!activeConflictRecord) return;
+  activeConflictRecord.syncStatus='synced'; await idbPut(activeConflictRecord);
+  await writeAuditLog('sync_conflict_resolved', {resolution:'keep_server', client_uuid:activeConflictRecord.client_uuid});
+  await refreshOutboxState(); closeConflictModal(); toast('Kept server record; local entry discarded', 'info');
+});
+document.getElementById('btnMergeBoth').addEventListener('click', async ()=>{
+  if (!activeConflictRecord) return;
+  await insertTransaction({ student_id:activeConflictRecord.student_id, invoice_id:null, amount:activeConflictRecord.amount, payment_method:activeConflictRecord.payment_method, status:'completed', client_uuid:activeConflictRecord.client_uuid, source:'offline_sync' });
+  activeConflictRecord.syncStatus='synced'; await idbPut(activeConflictRecord);
+  await writeAuditLog('sync_conflict_resolved', {resolution:'merge_both', client_uuid:activeConflictRecord.client_uuid});
+  await refreshOutboxState(); closeConflictModal(); toast('Both transactions merged — flagged for review', 'danger');
+});
+
+/* ---- connection state ---- */
+function setOnline(online){
+  const wasOnline = STATE.isOnline;
+  STATE.isOnline = online;
+  if (!online && wasOnline !== false) wentOfflineAt = Date.now();
+  document.getElementById('connDot').classList.toggle('off', !online);
+  document.getElementById('connLabel').textContent = online ? 'Online' : 'Offline';
+  if (online) syncOutbox();
+}
+window.addEventListener('online', ()=>setOnline(true));
+window.addEventListener('offline', ()=>setOnline(false));
+document.getElementById('btnSimOffline').addEventListener('click', ()=>{
+  setOnline(!STATE.isOnline);
+  toast(STATE.isOnline ? 'Simulated: back online' : 'Simulated: offline mode', STATE.isOnline?'money':'danger');
+});
+document.getElementById('btnSyncNow').addEventListener('click', syncOutbox);
+
+/* ==================================================================
+   10. INIT
+   ================================================================== */
+async function init(){
+  await openIDB();
+  await loadStudents();
+  await loadFeeRules();
+
+  // Populate initial mock transactions for ticker/metrics if empty
+  if (STATE.transactions.length === 0) {
+    const initialTxns = generateMockTransactions(STATE.students);
+    initialTxns.forEach(t => {
+      STATE.transactions.push(t);
+      const student = STATE.students.find(s => s.id === t.student_id);
+      STATE.todayCollected += Number(t.amount);
+      STATE.todayTxnCount += 1;
+      
+      // Render ticker row
+      const ticker = document.getElementById('ticker');
+      if (ticker.querySelector('.empty')) ticker.innerHTML = '';
+      const row = document.createElement('div');
+      row.className = 'ticker-row';
+      row.innerHTML = `
+        <div class="ticker-icon">${t.payment_method==='upi'?'📱':t.payment_method==='cheque'?'🏦':'💵'}</div>
+        <div>
+          <div style="font-weight:600;">${student?student.name:'Unknown student'}</div>
+          <div style="color:var(--text-lo); font-size:11px;">${t.payment_method.toUpperCase()} · ${new Date(t.created_at).toLocaleTimeString()}</div>
+        </div>
+        <div class="ticker-amt">+${money(t.amount)}</div>`;
+      ticker.appendChild(row);
+    });
+  }
+
+  // Pre-seed an initial sample offline queue item if empty
+  const existingQueue = await idbGetAll();
+  if (existingQueue.length === 0 && STATE.students.length > 0) {
+    const sampleQueueItem = {
+      client_uuid: uid(),
+      student_id: STATE.students[1].id,
+      amount: 4500,
+      payment_method: 'upi',
+      status: 'completed',
+      source: 'offline_sync',
+      syncStatus: 'pending',
+      queued_at: new Date(Date.now() - 1000 * 60 * 12).toISOString()
+    };
+    await idbPut(sampleQueueItem);
+  }
+
+  await refreshOutboxState();
+  populateStudentSelectors();
+  renderRiskMatrix();
+  renderMetrics();
+  renderSavedRules();
+  initChart();
+  regenerateQR();
+  initRealtime();
+  setOnline(navigator.onLine);
+}
+init();
+</script>
+</body>
+</html>
